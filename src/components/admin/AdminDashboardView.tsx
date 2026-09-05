@@ -75,7 +75,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ setCurre
       // Fetch Settings
       const settingsDoc = await getDocs(collection(db, 'websiteSettings'));
       if (!settingsDoc.empty) {
-        setWebsiteSettings(settingsDoc.docs[0].data() as any);
+        const data = settingsDoc.docs[0].data();
+        setWebsiteSettings(prev => ({ ...prev, ...data }));
       } else {
         await setDoc(doc(db, 'websiteSettings', 'config'), websiteSettings);
       }
@@ -297,7 +298,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ setCurre
                       <label className="block text-xs font-semibold text-[#072417] mb-1">Product Name</label>
                       <input 
                         type="text" 
-                        value={editingProduct.name}
+                        value={editingProduct.name || ''}
                         onChange={e => setEditingProduct({...editingProduct, name: e.target.value})}
                         className="w-full px-3 py-2 bg-white border border-[#d2dcd5] rounded-xl text-xs"
                         required
@@ -307,7 +308,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ setCurre
                       <label className="block text-xs font-semibold text-[#072417] mb-1">Subtitle</label>
                       <input 
                         type="text" 
-                        value={editingProduct.subtitle}
+                        value={editingProduct.subtitle || ''}
                         onChange={e => setEditingProduct({...editingProduct, subtitle: e.target.value})}
                         className="w-full px-3 py-2 bg-white border border-[#d2dcd5] rounded-xl text-xs"
                         required
@@ -317,7 +318,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ setCurre
                       <label className="block text-xs font-semibold text-[#072417] mb-1">Price (₹)</label>
                       <input 
                         type="number" 
-                        value={editingProduct.price}
+                        value={editingProduct.price ?? ''}
                         onChange={e => setEditingProduct({...editingProduct, price: Number(e.target.value)})}
                         className="w-full px-3 py-2 bg-white border border-[#d2dcd5] rounded-xl text-xs"
                         required
@@ -327,7 +328,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ setCurre
                       <label className="block text-xs font-semibold text-[#072417] mb-1">Weight / Size</label>
                       <input 
                         type="text" 
-                        value={editingProduct.weight}
+                        value={editingProduct.weight || ''}
                         onChange={e => setEditingProduct({...editingProduct, weight: e.target.value})}
                         className="w-full px-3 py-2 bg-white border border-[#d2dcd5] rounded-xl text-xs"
                         placeholder="e.g. 100g Pure Bar"
@@ -366,7 +367,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ setCurre
                       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                         <input 
                           type="text" 
-                          value={editingProduct.image}
+                          value={editingProduct.image || ''}
                           onChange={e => setEditingProduct({...editingProduct, image: e.target.value})}
                           className="flex-1 px-3 py-2 bg-white border border-[#d2dcd5] rounded-xl text-xs"
                           placeholder="Image URL or Firebase Storage URL"
@@ -492,7 +493,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ setCurre
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-semibold text-[#072417] mb-1">Description</label>
                       <textarea 
-                        value={editingProduct.description}
+                        value={editingProduct.description || ''}
                         onChange={e => setEditingProduct({...editingProduct, description: e.target.value})}
                         className="w-full px-3 py-2 bg-white border border-[#d2dcd5] rounded-xl text-xs h-20"
                         required

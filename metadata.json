@@ -1,0 +1,6 @@
+{
+  "name": "Prakriti Soap",
+  "description": "Handcrafted Ayurvedic and botanical natural soaps from Akola. Pure by nature, gentle on you.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

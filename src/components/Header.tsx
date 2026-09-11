@@ -6,9 +6,10 @@ interface HeaderProps {
   setCurrentView: (view: ViewState) => void;
   cartCount: number;
   announcement?: string;
+  currentUser?: any;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, cartCount, announcement }) => {
+export const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, cartCount, announcement, currentUser }) => {
   const getViewSubtitle = () => {
     switch (currentView) {
       case 'home': return 'Home';
@@ -72,11 +73,12 @@ export const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, car
             )}
           </button>
           <button 
-            aria-label="About Prakriti"
-            onClick={() => setCurrentView('about')}
-            className="w-8 h-8 rounded-full bg-[#072417] flex items-center justify-center ml-1 hover:opacity-90 transition-opacity"
+            aria-label="Account / Admin Portal"
+            onClick={() => setCurrentView(currentUser ? 'admin-dashboard' : 'admin-login')}
+            className={`w-8 h-8 rounded-full flex items-center justify-center ml-1 transition-opacity cursor-pointer ${currentUser ? 'bg-[#ffdcbd] text-[#072417] border border-[#d2dcd5]' : 'bg-[#072417] text-white hover:opacity-90'}`}
+            title={currentUser ? `Signed in as ${currentUser.email || currentUser.displayName}` : 'Sign In / Register'}
           >
-            <span className="material-symbols-outlined text-white text-[18px]">person</span>
+            <span className="material-symbols-outlined text-[18px]">person</span>
           </button>
         </div>
       </div>

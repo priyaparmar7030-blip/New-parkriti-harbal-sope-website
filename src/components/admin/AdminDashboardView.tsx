@@ -47,6 +47,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ setCurre
   const [isNewProduct, setIsNewProduct] = useState(false);
 
   useEffect(() => {
+    if (!auth.currentUser) {
+      setCurrentView('admin-login');
+      return;
+    }
     fetchFirestoreData();
   }, []);
 
@@ -143,7 +147,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ setCurre
           <span className="text-2xl">🧼</span>
           <div>
             <h1 className="font-['Playfair_Display'] text-lg font-bold tracking-tight">Prakriti Soap Admin</h1>
-            <p className="text-[11px] text-[#85a490]">Authorized Management Console • {auth.currentUser?.email || 'admin@prakritisoap.com'}</p>
+            <p className="text-[11px] text-[#85a490]">
+              Authorized Console • {auth.currentUser?.displayName ? `${auth.currentUser.displayName} (${auth.currentUser.email})` : (auth.currentUser?.email || 'admin@prakritisoap.com')}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -859,7 +865,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ setCurre
               <div className="bg-[#fbf9f6] p-5 rounded-2xl border border-[#ebefeb] space-y-3 max-w-xl">
                 <div>
                   <span className="text-xs font-semibold text-[#62776c] uppercase tracking-wider">Firebase Project ID</span>
-                  <p className="text-sm font-bold text-[#072417] mt-0.5">soy-retina-0n50x</p>
+                  <p className="text-sm font-bold text-[#072417] mt-0.5">soy-retina-0n50x-87d1d</p>
                 </div>
                 <div>
                   <span className="text-xs font-semibold text-[#62776c] uppercase tracking-wider">Authorized Admin Email</span>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ViewState, SoapProduct, CartItem, WebsiteSettings } from './types';
 import { SOAPS_DATA } from './data/soaps';
-import { db } from './lib/firebase';
+import { db, auth, onAuthStateChanged, signOut, type User } from './lib/firebase';
 import { collection, getDocs, setDoc, doc, addDoc } from 'firebase/firestore';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -39,6 +39,17 @@ export default function App() {
     { product: SOAPS_DATA[0], quantity: 2 },
     { product: SOAPS_DATA[2], quantity: 1 }
   ]);
+
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -158,10 +169,29 @@ export default function App() {
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   if (currentView === 'admin-dashboard') {
+    if (authLoading) {
+      return (
+        <div className="min-h-screen bg-[#fbf9f6] flex flex-col items-center justify-center font-['Plus_Jakarta_Sans']">
+          <div className="w-10 h-10 border-3 border-[#072417] border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-xs font-semibold text-[#4c6455] tracking-widest uppercase">Checking authentication...</p>
+        </div>
+      );
+    }
+    if (!currentUser) {
+      return (
+        <AdminLoginView 
+          setCurrentView={setCurrentView} 
+          onLoginSuccess={() => setCurrentView('admin-dashboard')} 
+        />
+      );
+    }
     return (
       <AdminDashboardView 
         setCurrentView={setCurrentView} 
-        onLogout={() => setCurrentView('home')} 
+        onLogout={async () => {
+          await signOut(auth);
+          setCurrentView('home');
+        }} 
       />
     );
   }
@@ -173,6 +203,7 @@ export default function App() {
         setCurrentView={setCurrentView} 
         cartCount={totalCartCount} 
         announcement={websiteSettings.announcement}
+        currentUser={currentUser}
       />
 
       <main className="flex flex-col relative w-full pt-24 pb-28 max-w-4xl mx-auto flex-1">
@@ -225,10 +256,49 @@ export default function App() {
           />
         )}
         {currentView === 'admin-login' && (
-          <AdminLoginView 
-            setCurrentView={setCurrentView} 
-            onLoginSuccess={() => setCurrentView('admin-dashboard')} 
-          />
+          authLoading ? (
+            <div className="py-24 flex flex-col items-center justify-center">
+              <div className="w-8 h-8 border-2 border-[#072417] border-t-transparent rounded-full animate-spin"></div>
+              <p className="mt-3 text-xs font-semibold text-[#4c6455] tracking-widest uppercase">Checking session...</p>
+            </div>
+          ) : currentUser ? (
+            <div className="min-h-[60vh] flex items-center justify-center px-4 py-12">
+              <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-[#ebefeb] text-center">
+                <div className="w-14 h-14 bg-[#072417] text-[#ffdcbd] rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-md">
+                  🌿
+                </div>
+                <h2 className="font-['Playfair_Display'] text-2xl font-bold text-[#072417]">Already Signed In</h2>
+                <p className="text-xs text-[#62776c] mt-2">
+                  You are currently authenticated as <br />
+                  <span className="font-semibold text-[#072417]">{currentUser.email || currentUser.displayName || 'Prakriti User'}</span>
+                </p>
+                <div className="mt-6 flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('admin-dashboard')}
+                    className="w-full py-3 bg-[#072417] text-white rounded-xl font-semibold text-sm hover:bg-[#072417]/90 transition-all shadow-md cursor-pointer"
+                  >
+                    Go to Admin Dashboard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await signOut(auth);
+                      setCurrentView('admin-login');
+                    }}
+                    className="w-full py-2.5 bg-[#fbf9f6] border border-[#d2dcd5] text-[#072417] rounded-xl font-medium text-xs hover:bg-[#ebefeb] transition-colors cursor-pointer"
+                  >
+                    Sign Out & Switch Account
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <AdminLoginView 
+              setCurrentView={setCurrentView} 
+              onLoginSuccess={() => setCurrentView('admin-dashboard')} 
+            />
+          )
         )}
       </main>
 

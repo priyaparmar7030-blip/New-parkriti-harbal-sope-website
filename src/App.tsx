@@ -1,24 +1,30 @@
 import { useState, useEffect } from 'react';
-import { ViewState, SoapProduct, CartItem, WebsiteSettings } from './types';
+import { ViewState, SoapProduct, CartItem, WebsiteSettings, CustomerUser, Order } from './types';
 import { SOAPS_DATA } from './data/soaps';
-import { db, auth, onAuthStateChanged, signOut, type User } from './lib/firebase';
-import { collection, getDocs, setDoc, doc, addDoc } from 'firebase/firestore';
+import { auth, onAuthStateChanged, signOut as firebaseSignOut, db, handleFirestoreError, OperationType } from './lib/firebase';
+import { collection, getDocs, setDoc, doc } from 'firebase/firestore';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { BottomNav } from './components/BottomNav';
+import { AuthModal } from './components/AuthModal';
 import { HomeView } from './views/HomeView';
 import { ShopView } from './views/ShopView';
 import { ProductDetailView } from './views/ProductDetailView';
 import { FindMySoapView } from './views/FindMySoapView';
 import { BagView } from './views/BagView';
 import { AboutView } from './views/AboutView';
-import { AdminLoginView } from './components/admin/AdminLoginView';
-import { AdminDashboardView } from './components/admin/AdminDashboardView';
+import { CustomerAccountView } from './views/CustomerAccountView';
+import { AdminDashboardView } from './views/AdminDashboardView';
+
+const OWNER_EMAIL = import.meta.env.VITE_OWNER_EMAIL || 'priyaparmar7030@gmail.com';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>('home');
   const [products, setProducts] = useState<SoapProduct[]>(SOAPS_DATA);
   const [selectedSoap, setSelectedSoap] = useState<SoapProduct>(SOAPS_DATA[0]);
+  const [currentUser, setCurrentUser] = useState<CustomerUser | null>(null);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+
   const [websiteSettings, setWebsiteSettings] = useState<WebsiteSettings>({
     heroTitle: 'Pure Ayurvedic Soaps Crafted for Living Harmony',
     heroSubtitle: 'Ethically harvested wild botanicals and cold-pressed cold-process oils from Akola, Maharashtra.',
@@ -34,48 +40,55 @@ export default function App() {
     newProductIds: 'tulsi-mint, aloe-honey',
   });
   
-  // Pre-loaded cart matching Stitch design with 2 items (2x Neem Soap, 1x Sandalwood & Kesar)
+  // Pre-loaded cart
   const [cart, setCart] = useState<CartItem[]>([
     { product: SOAPS_DATA[0], quantity: 2 },
     { product: SOAPS_DATA[2], quantity: 1 }
   ]);
 
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setAuthLoading(false);
+    // Firebase auth listener
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setCurrentUser({
+          id: user.uid,
+          email: user.email || '',
+          fullName: user.displayName || user.email?.split('@')[0] || 'Valued Customer',
+          createdAt: user.metadata.creationTime || new Date().toISOString()
+        });
+      } else {
+        setCurrentUser(null);
+      }
     });
-    return () => unsubscribe();
-  }, []);
 
-  useEffect(() => {
-    async function loadData() {
+    // Load products and settings from Firestore if available
+    async function loadFirestoreData() {
       try {
         const prodSnap = await getDocs(collection(db, 'products'));
         if (!prodSnap.empty) {
-          const prods = prodSnap.docs.map(d => ({ id: d.id, ...d.data() } as SoapProduct));
-          setProducts(prods);
-        } else {
-          for (const p of SOAPS_DATA) {
-            await setDoc(doc(db, 'products', p.id), p);
+          const loadedProducts = prodSnap.docs.map(d => d.data() as SoapProduct);
+          if (loadedProducts.length > 0) {
+            setProducts(loadedProducts);
           }
         }
-
-        const settingsSnap = await getDocs(collection(db, 'websiteSettings'));
-        if (!settingsSnap.empty) {
-          setWebsiteSettings(settingsSnap.docs[0].data() as WebsiteSettings);
-        } else {
-          await setDoc(doc(db, 'websiteSettings', 'config'), websiteSettings);
-        }
       } catch (e) {
-        console.error("Error loading data from Firestore:", e);
+        handleFirestoreError(e, OperationType.LIST, 'products');
       }
     }
-    loadData();
-  }, [currentView]); // Re-fetch settings when view changes so admin updates appear instantly
+    loadFirestoreData();
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await firebaseSignOut(auth);
+      setCurrentUser(null);
+      setCurrentView('home');
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const addToCart = (soap: SoapProduct) => {
     if (soap.stockStatus === 'Out of Stock') return;
@@ -118,7 +131,6 @@ export default function App() {
 
   const handleCheckoutAndReduceStock = async (customerName: string, customerAddress: string) => {
     try {
-      // Validate stock again
       for (const item of cart) {
         const prod = products.find(p => p.id === item.product.id);
         if (!prod) continue;
@@ -132,35 +144,38 @@ export default function App() {
       const orderId = `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
       const totalAmount = cart.reduce((s, i) => s + (i.product.price * i.quantity), 0);
 
-      for (const item of cart) {
-        const prod = products.find(p => p.id === item.product.id);
-        if (prod) {
-          const currentCount = prod.stockCount !== undefined ? prod.stockCount : (prod.stockStatus === 'Out of Stock' ? 0 : prod.stockStatus === 'Only 3 left' ? 3 : 20);
-          const nextCount = Math.max(0, currentCount - item.quantity);
-          const nextStatus = nextCount === 0 ? 'Out of Stock' : nextCount <= 3 ? 'Only 3 left' : 'In Stock';
-          
-          const updated = { ...prod, stockCount: nextCount, stockStatus: nextStatus };
-          await setDoc(doc(db, 'products', prod.id), updated);
-        }
-      }
+      const updatedProducts = products.map(prod => {
+        const cartItem = cart.find(i => i.product.id === prod.id);
+        if (!cartItem) return prod;
+        const currentCount = prod.stockCount !== undefined ? prod.stockCount : (prod.stockStatus === 'Out of Stock' ? 0 : prod.stockStatus === 'Only 3 left' ? 3 : 20);
+        const nextCount = Math.max(0, currentCount - cartItem.quantity);
+        const nextStatus = nextCount === 0 ? 'Out of Stock' : nextCount <= 3 ? 'Only 3 left' : 'In Stock';
+        return { ...prod, stockCount: nextCount, stockStatus: nextStatus };
+      });
 
-      await setDoc(doc(db, 'orders', orderId), {
+      setProducts(updatedProducts);
+
+      // Save order to Firestore
+      const newOrder: Order = {
         id: orderId,
-        customerName: customerName || 'Valued Customer',
+        customerName: customerName || currentUser?.fullName || 'Valued Customer',
+        customerEmail: currentUser?.email || 'customer@prakritisoap.com',
         customerAddress: customerAddress || 'Akola / All-India',
         date: new Date().toISOString().split('T')[0],
         items: cart.map(i => `${i.quantity}x ${i.product.name} (${i.product.weight || '100g'})`).join(', '),
         quantities: cart.map(i => ({ productId: i.product.id, name: i.product.name, quantity: i.quantity })),
         total: totalAmount,
-        status: 'New',
+        status: 'Confirmed',
         createdAt: new Date().toISOString()
-      });
+      };
 
-      // Reload products
-      const snap = await getDocs(collection(db, 'products'));
-      if (!snap.empty) {
-        setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() } as SoapProduct)));
+      try {
+        await setDoc(doc(db, 'orders', orderId), newOrder);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `orders/${orderId}`);
       }
+
+      setCart([]);
     } catch (e) {
       console.error("Error reducing stock on checkout:", e);
     }
@@ -168,46 +183,23 @@ export default function App() {
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  if (currentView === 'admin-dashboard') {
-    if (authLoading) {
-      return (
-        <div className="min-h-screen bg-[#fbf9f6] flex flex-col items-center justify-center font-['Plus_Jakarta_Sans']">
-          <div className="w-10 h-10 border-3 border-[#072417] border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-xs font-semibold text-[#4c6455] tracking-widest uppercase">Checking authentication...</p>
-        </div>
-      );
-    }
-    if (!currentUser) {
-      return (
-        <AdminLoginView 
-          setCurrentView={setCurrentView} 
-          onLoginSuccess={() => setCurrentView('admin-dashboard')} 
-        />
-      );
-    }
-    return (
-      <AdminDashboardView 
-        setCurrentView={setCurrentView} 
-        onLogout={async () => {
-          await signOut(auth);
-          setCurrentView('home');
-        }} 
-      />
-    );
-  }
+  // Enforce security check for admin dashboard view
+  const isOwner = currentUser?.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
+  const effectiveView = (currentView === 'admin-dashboard' && !isOwner) ? 'customer-account' : currentView;
 
   return (
     <div className="min-h-screen bg-[#fbf9f6] text-[#1b1c1a] font-['Plus_Jakarta_Sans'] flex flex-col selection:bg-[#cbe6d4] selection:text-[#072417]">
       <Header 
-        currentView={currentView} 
+        currentView={effectiveView} 
         setCurrentView={setCurrentView} 
         cartCount={totalCartCount} 
         announcement={websiteSettings.announcement}
         currentUser={currentUser}
+        onOpenAuth={() => setIsAuthOpen(true)}
       />
 
       <main className="flex flex-col relative w-full pt-24 pb-28 max-w-4xl mx-auto flex-1">
-        {currentView === 'home' && (
+        {effectiveView === 'home' && (
           <HomeView 
             setCurrentView={setCurrentView} 
             setSelectedSoap={setSelectedSoap} 
@@ -216,7 +208,7 @@ export default function App() {
             settings={websiteSettings}
           />
         )}
-        {currentView === 'shop' && (
+        {effectiveView === 'shop' && (
           <ShopView 
             setCurrentView={setCurrentView} 
             setSelectedSoap={setSelectedSoap} 
@@ -224,15 +216,17 @@ export default function App() {
             products={products}
           />
         )}
-        {currentView === 'product-detail' && (
+        {effectiveView === 'product-detail' && (
           <ProductDetailView 
             product={products.find(p => p.id === selectedSoap.id) || selectedSoap} 
             setCurrentView={setCurrentView} 
             addToCart={addToCart} 
+            currentUser={currentUser}
+            onOpenAuth={() => setIsAuthOpen(true)}
             products={products}
           />
         )}
-        {currentView === 'find-my-soap' && (
+        {effectiveView === 'find-my-soap' && (
           <FindMySoapView 
             setCurrentView={setCurrentView} 
             setSelectedSoap={setSelectedSoap} 
@@ -240,7 +234,7 @@ export default function App() {
             products={products}
           />
         )}
-        {currentView === 'bag' && (
+        {effectiveView === 'bag' && (
           <BagView 
             cart={cart} 
             updateQuantity={updateQuantity} 
@@ -250,55 +244,27 @@ export default function App() {
             onCheckout={handleCheckoutAndReduceStock}
           />
         )}
-        {currentView === 'about' && (
+        {effectiveView === 'about' && (
           <AboutView 
             setCurrentView={setCurrentView} 
           />
         )}
-        {currentView === 'admin-login' && (
-          authLoading ? (
-            <div className="py-24 flex flex-col items-center justify-center">
-              <div className="w-8 h-8 border-2 border-[#072417] border-t-transparent rounded-full animate-spin"></div>
-              <p className="mt-3 text-xs font-semibold text-[#4c6455] tracking-widest uppercase">Checking session...</p>
-            </div>
-          ) : currentUser ? (
-            <div className="min-h-[60vh] flex items-center justify-center px-4 py-12">
-              <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-[#ebefeb] text-center">
-                <div className="w-14 h-14 bg-[#072417] text-[#ffdcbd] rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-md">
-                  🌿
-                </div>
-                <h2 className="font-['Playfair_Display'] text-2xl font-bold text-[#072417]">Already Signed In</h2>
-                <p className="text-xs text-[#62776c] mt-2">
-                  You are currently authenticated as <br />
-                  <span className="font-semibold text-[#072417]">{currentUser.email || currentUser.displayName || 'Prakriti User'}</span>
-                </p>
-                <div className="mt-6 flex flex-col gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentView('admin-dashboard')}
-                    className="w-full py-3 bg-[#072417] text-white rounded-xl font-semibold text-sm hover:bg-[#072417]/90 transition-all shadow-md cursor-pointer"
-                  >
-                    Go to Admin Dashboard
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await signOut(auth);
-                      setCurrentView('admin-login');
-                    }}
-                    className="w-full py-2.5 bg-[#fbf9f6] border border-[#d2dcd5] text-[#072417] rounded-xl font-medium text-xs hover:bg-[#ebefeb] transition-colors cursor-pointer"
-                  >
-                    Sign Out & Switch Account
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <AdminLoginView 
-              setCurrentView={setCurrentView} 
-              onLoginSuccess={() => setCurrentView('admin-dashboard')} 
-            />
-          )
+        {effectiveView === 'customer-account' && currentUser && (
+          <CustomerAccountView 
+            currentUser={currentUser} 
+            onLogout={handleLogout} 
+            setCurrentView={setCurrentView} 
+          />
+        )}
+        {effectiveView === 'admin-dashboard' && isOwner && (
+          <AdminDashboardView 
+            products={products}
+            setProducts={setProducts}
+            websiteSettings={websiteSettings}
+            setWebsiteSettings={setWebsiteSettings}
+            onLogout={handleLogout}
+            setCurrentView={setCurrentView}
+          />
         )}
       </main>
 
@@ -312,9 +278,23 @@ export default function App() {
       />
 
       <BottomNav 
-        currentView={currentView} 
+        currentView={effectiveView} 
         setCurrentView={setCurrentView} 
         cartCount={totalCartCount} 
+      />
+
+      <AuthModal 
+        isOpen={isAuthOpen} 
+        onClose={() => setIsAuthOpen(false)} 
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          const ownerMatch = user.email.toLowerCase() === OWNER_EMAIL.toLowerCase();
+          if (ownerMatch) {
+            setCurrentView('admin-dashboard');
+          } else {
+            setCurrentView('customer-account');
+          }
+        }}
       />
     </div>
   );

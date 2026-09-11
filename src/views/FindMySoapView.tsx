@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ViewState, SoapProduct } from '../types';
 import { SOAPS_DATA } from '../data/soaps';
-import { db } from '../lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
 
 interface FindMySoapViewProps {
   setCurrentView: (view: ViewState) => void;
@@ -18,25 +16,11 @@ export const FindMySoapView: React.FC<FindMySoapViewProps> = ({ setCurrentView, 
   const [treatment, setTreatment] = useState('No');
   const [showRecommendation, setShowRecommendation] = useState(false);
   const [addedToast, setAddedToast] = useState(false);
-  const [rules, setRules] = useState<any[]>([
+  const rules = [
     { skinType: 'Oily', primaryNeed: 'Excess Oil', recommendedSoap: 'Prakriti Neem Soap' },
     { skinType: 'Dry', primaryNeed: 'Nourishment', recommendedSoap: 'Raw Sandalwood & Kesar' },
     { skinType: 'Sensitive', primaryNeed: 'Calming', recommendedSoap: 'Calming Aloe & Honey' },
-  ]);
-
-  useEffect(() => {
-    async function loadRules() {
-      try {
-        const snap = await getDocs(collection(db, 'recommendationRules'));
-        if (!snap.empty) {
-          setRules(snap.docs.map(d => d.data()));
-        }
-      } catch (e) {
-        console.error("Error loading recommendation rules:", e);
-      }
-    }
-    loadRules();
-  }, []);
+  ];
 
   const matchingRule = rules.find(r => r.skinType.toLowerCase() === skinType.toLowerCase()) || rules[0];
   const targetSoapName = matchingRule ? matchingRule.recommendedSoap : 'Prakriti Neem Soap';

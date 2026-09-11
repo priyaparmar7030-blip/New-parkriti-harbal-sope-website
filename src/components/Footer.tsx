@@ -90,13 +90,6 @@ export const Footer: React.FC<FooterProps> = ({
 
         <div className="pt-4 mt-2 border-t border-white/10 flex items-center justify-between text-[11px] font-bold tracking-wider text-[#85a490]">
           <p>© 2024 PRAKRITI SOAP. Sacred Botanicals.</p>
-          <button 
-            onClick={() => setCurrentView('admin-login')} 
-            aria-label="Staff Portal / Admin Login" 
-            className="w-11 h-11 flex items-center justify-end text-[#85a490]/70 hover:text-white transition-colors"
-          >
-            <span className="text-[14px]" style={{ height: '89px' }}>🧼</span>
-          </button>
         </div>
       </div>
     </footer>

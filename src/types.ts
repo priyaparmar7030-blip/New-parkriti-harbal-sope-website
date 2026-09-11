@@ -1,4 +1,4 @@
-export type ViewState = 'home' | 'shop' | 'product-detail' | 'find-my-soap' | 'bag' | 'about' | 'admin-login' | 'admin-dashboard';
+export type ViewState = 'home' | 'shop' | 'product-detail' | 'find-my-soap' | 'bag' | 'about' | 'customer-account' | 'admin-dashboard';
 
 export interface SoapProduct {
   id: string;
@@ -24,6 +24,40 @@ export interface SoapProduct {
 export interface CartItem {
   product: SoapProduct;
   quantity: number;
+}
+
+export interface CustomerUser {
+  id: string;
+  customerId?: string;
+  email: string;
+  fullName: string;
+  role?: 'customer' | 'owner';
+  createdAt: string;
+}
+
+export interface Review {
+  id: string;
+  productId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  status?: 'approved' | 'hidden';
+}
+
+export interface Order {
+  id: string;
+  customerName: string;
+  customerEmail?: string;
+  customerAddress: string;
+  date: string;
+  items: string;
+  quantities: { productId: string; name: string; quantity: number }[];
+  total: number;
+  status: string;
+  createdAt: string;
 }
 
 export interface WebsiteSettings {

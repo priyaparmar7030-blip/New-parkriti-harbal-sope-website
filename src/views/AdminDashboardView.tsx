@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SoapProduct, Order, WebsiteSettings, ViewState, Review } from '../types';
 import { db, storage, ref, uploadBytes, getDownloadURL, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, getDocs, setDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { AdminLoyaltyRewardsSection } from '../components/AdminLoyaltyRewardsSection';
 
 interface AdminDashboardViewProps {
   products: SoapProduct[];
@@ -20,7 +21,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onLogout,
   setCurrentView
 }) => {
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'reviews' | 'settings'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'reviews' | 'settings' | 'loyalty'>('products');
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [settingsForm, setSettingsForm] = useState<WebsiteSettings>(websiteSettings);
@@ -281,6 +282,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         >
           Store & Logo Settings
         </button>
+        <button
+          onClick={() => setActiveTab('loyalty')}
+          className={`pb-3 text-[14px] font-bold border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab === 'loyalty' ? 'border-[#072417] text-[#072417]' : 'border-transparent text-[#607769] hover:text-[#072417]'}`}
+        >
+          <span>🎁 Loyalty & Rewards</span>
+        </button>
       </div>
 
       {/* Products Tab */}
@@ -495,6 +502,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Loyalty & Rewards Tab */}
+      {activeTab === 'loyalty' && (
+        <AdminLoyaltyRewardsSection />
       )}
 
       {/* Add / Edit Product Modal */}

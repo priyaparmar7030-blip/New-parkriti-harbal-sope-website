@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { CustomerUser, Order, Review, ViewState } from '../types';
+import { PrakritiLoyaltyRewards } from '../components/PrakritiLoyaltyRewards';
+import { CustomerExclusiveOffers } from '../components/CustomerExclusiveOffers';
+import { db } from '../lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 interface CustomerAccountViewProps {
   currentUser: CustomerUser;
@@ -18,6 +22,41 @@ export const CustomerAccountView: React.FC<CustomerAccountViewProps> = ({ curren
 
       const savedReviews = JSON.parse(localStorage.getItem('prakriti_reviews') || '[]');
       setReviews(savedReviews.filter((r: Review) => r.userId === currentUser.id));
+
+      // Also query Firestore orders
+      getDocs(collection(db, 'orders'))
+        .then(snap => {
+          const firestoreOrders: Order[] = [];
+          const cleanCustId = (currentUser.customerId || currentUser.id || '').toUpperCase();
+          const cleanEmail = (currentUser.email || '').toLowerCase().trim();
+          const cleanName = (currentUser.fullName || '').toLowerCase().trim();
+
+          snap.forEach(docSnap => {
+            const ord = docSnap.data() as Order;
+            const ordId = ord.id || docSnap.id;
+            const matchesId = Boolean(ord.customerId) && String(ord.customerId).toUpperCase() === cleanCustId;
+            const matchesEmail = Boolean(cleanEmail) && Boolean(ord.customerEmail) && String(ord.customerEmail).toLowerCase().trim() === cleanEmail;
+            const matchesName = Boolean(cleanName) && Boolean(ord.customerName) && String(ord.customerName).toLowerCase().trim() === cleanName;
+
+            if (matchesId || matchesEmail || matchesName) {
+              firestoreOrders.push({ ...ord, id: ordId });
+            }
+          });
+
+          if (firestoreOrders.length > 0) {
+            const orderMap = new Map<string, Order>();
+            savedOrders.forEach((o: Order) => {
+              if (o.id) orderMap.set(o.id, o);
+            });
+            firestoreOrders.forEach(o => {
+              if (o.id) orderMap.set(o.id, o);
+            });
+            const merged = Array.from(orderMap.values());
+            setOrders(merged);
+            localStorage.setItem('prakriti_orders', JSON.stringify(merged));
+          }
+        })
+        .catch(() => {});
     } catch (e) {
       console.error(e);
     }
@@ -64,6 +103,17 @@ export const CustomerAccountView: React.FC<CustomerAccountViewProps> = ({ curren
           Sign Out
         </button>
       </div>
+
+      {/* Prakriti Loyalty Rewards Section */}
+      <PrakritiLoyaltyRewards
+        currentUser={currentUser}
+        localOrders={orders}
+      />
+
+      {/* 🎁 My Exclusive Offers Section */}
+      <CustomerExclusiveOffers
+        currentUser={currentUser}
+      />
 
       {/* Orders Section */}
       <div className="bg-white border border-[#d2dcd5] rounded-2xl p-6 sm:p-8 shadow-sm mb-6">

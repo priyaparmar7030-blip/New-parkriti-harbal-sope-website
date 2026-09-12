@@ -21,7 +21,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
   const [signupName, setSignupName] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
-  const [generatedCustomerId, setGeneratedCustomerId] = useState<string | null>(null);
+  const [createdCustomerId, setCreatedCustomerId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,22 +31,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
   const handleCustomerLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Validation
+    const trimmedId = loginCustomerId.trim();
+    if (!trimmedId) {
+      setError('Customer ID is required.');
+      return;
+    }
+    if (!loginPassword) {
+      setError('Password is required.');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const res = await fetch('/api/customer-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId: loginCustomerId, password: loginPassword })
+        body: JSON.stringify({ customerId: trimmedId, password: loginPassword })
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Login failed.');
       }
+
+      // Store session token for page refresh & session persistence (NOT storing password or customer database in localStorage)
+      if (data.sessionToken) {
+        localStorage.setItem('prakriti_customer_token', data.sessionToken);
+      }
+
       onLoginSuccess(data.customer);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Invalid Customer ID or Password.');
+      setError(err.message || 'Login failed.');
     } finally {
       setLoading(false);
     }
@@ -55,20 +73,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
   const handleCustomerSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Validation
+    const trimmedName = signupName.trim();
+    if (!trimmedName) {
+      setError('Customer Name is required.');
+      return;
+    }
+    if (!signupPassword || signupPassword.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const res = await fetch('/api/customer-signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName: signupName, password: signupPassword, email: signupEmail })
+        body: JSON.stringify({
+          fullName: trimmedName,
+          password: signupPassword,
+          email: signupEmail.trim()
+        })
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Signup failed.');
       }
-      setGeneratedCustomerId(data.customer.customerId);
-      onLoginSuccess(data.customer);
+
+      // Successfully created account in Firebase!
+      setCreatedCustomerId(data.customerId);
+      // Reset form fields
+      setSignupName('');
+      setSignupPassword('');
+      setSignupEmail('');
     } catch (err: any) {
       setError(err.message || 'Signup failed.');
     } finally {
@@ -107,9 +146,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
+    <div id="auth-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
       <div className="bg-[#fbf9f6] border border-[#d2dcd5] rounded-2xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative">
         <button 
+          id="close-auth-modal"
           onClick={onClose}
           className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-[#4c6455] hover:bg-[#efeeeb] transition-colors"
           aria-label="Close"
@@ -127,29 +167,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           <p className="text-[13px] text-[#607769] mt-1">
             {tab === 'customer-signin' && 'Login with your unique Customer ID and Password.'}
             {tab === 'customer-signup' && 'Enter your name and password (email optional).'}
-            {tab === 'owner-signin' && 'Restricted to store owner (priyaparmar7030@gmail.com).'}
+            {tab === 'owner-signin' && 'Restricted to authorized store owner.'}
           </p>
         </div>
 
         {/* Tab switcher */}
         <div className="grid grid-cols-3 gap-1 bg-[#efeeeb] p-1 rounded-xl mb-6 text-[11px] font-bold">
           <button
+            id="tab-customer-signin"
             type="button"
-            onClick={() => { setTab('customer-signin'); setError(null); setGeneratedCustomerId(null); }}
+            onClick={() => { setTab('customer-signin'); setError(null); setCreatedCustomerId(null); }}
             className={`py-2 rounded-lg transition-colors cursor-pointer ${tab === 'customer-signin' ? 'bg-[#072417] text-[#ffdcbd]' : 'text-[#607769]'}`}
           >
             Sign In
           </button>
           <button
+            id="tab-customer-signup"
             type="button"
-            onClick={() => { setTab('customer-signup'); setError(null); setGeneratedCustomerId(null); }}
+            onClick={() => { setTab('customer-signup'); setError(null); setCreatedCustomerId(null); }}
             className={`py-2 rounded-lg transition-colors cursor-pointer ${tab === 'customer-signup' ? 'bg-[#072417] text-[#ffdcbd]' : 'text-[#607769]'}`}
           >
             Sign Up
           </button>
           <button
+            id="tab-owner-signin"
             type="button"
-            onClick={() => { setTab('owner-signin'); setError(null); setGeneratedCustomerId(null); }}
+            onClick={() => { setTab('owner-signin'); setError(null); setCreatedCustomerId(null); }}
             className={`py-2 rounded-lg transition-colors cursor-pointer ${tab === 'owner-signin' ? 'bg-[#072417] text-[#ffdcbd]' : 'text-[#607769]'}`}
           >
             Owner
@@ -157,35 +200,49 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 text-[12px] rounded-xl font-medium">
+          <div id="auth-error-message" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 text-[12px] rounded-xl font-medium">
             {error}
           </div>
         )}
 
-        {generatedCustomerId && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-900 rounded-xl text-center animate-fadeIn">
-            <p className="text-[12px] font-bold uppercase tracking-wider text-green-800 mb-1">Account Created Successfully!</p>
-            <p className="text-[13px] text-green-700 mb-2">Your Unique Customer ID is:</p>
-            <div className="text-xl font-mono font-bold tracking-widest bg-white py-2 px-4 rounded-lg border border-green-300 inline-block text-[#072417] select-all">
-              {generatedCustomerId}
+        {createdCustomerId && (
+          <div id="signup-success-container" className="mb-6 p-5 bg-green-50 border border-green-200 text-green-900 rounded-xl text-center animate-fadeIn">
+            <div className="w-10 h-10 rounded-full bg-green-100 text-green-800 flex items-center justify-center mx-auto mb-2">
+              <span className="material-symbols-outlined text-[24px]">check</span>
             </div>
-            <p className="text-[11px] text-green-700 mt-2">Please save this Customer ID. You will need it to sign in next time!</p>
+            <h3 className="text-[16px] font-bold text-green-900 mb-1">
+              Account created successfully!
+            </h3>
+            <p className="text-[13px] text-green-800 font-medium mb-1">
+              Your Customer ID: <span className="font-mono font-bold text-[#072417] bg-white px-2 py-0.5 rounded border border-green-300">{createdCustomerId}</span>
+            </p>
+            <p className="text-[12px] text-green-700 mt-2 mb-4">
+              Please save your Customer ID for future login.
+            </p>
             <button
-              onClick={() => { onClose(); }}
-              className="mt-4 w-full py-2.5 bg-[#072417] text-[#ffdcbd] text-[12px] font-bold rounded-xl hover:bg-[#0c3623] cursor-pointer"
+              id="continue-to-signin-btn"
+              type="button"
+              onClick={() => {
+                setLoginCustomerId(createdCustomerId);
+                setLoginPassword('');
+                setCreatedCustomerId(null);
+                setError(null);
+                setTab('customer-signin');
+              }}
+              className="w-full py-2.5 bg-[#072417] text-[#ffdcbd] text-[13px] font-bold rounded-xl hover:bg-[#0c3623] cursor-pointer transition-colors shadow-sm"
             >
-              Continue to Account
+              Continue to Sign In
             </button>
           </div>
         )}
 
-        {!generatedCustomerId && tab === 'customer-signin' && (
-          <form onSubmit={handleCustomerLogin} className="space-y-4">
+        {!createdCustomerId && tab === 'customer-signin' && (
+          <form id="customer-signin-form" onSubmit={handleCustomerLogin} className="space-y-4">
             <div>
-              <label className="block text-[12px] font-semibold text-[#072417] mb-1">Customer ID *</label>
+              <label htmlFor="login-customer-id" className="block text-[12px] font-semibold text-[#072417] mb-1">Customer ID *</label>
               <input 
+                id="login-customer-id"
                 type="text" 
-                required 
                 value={loginCustomerId} 
                 onChange={e => setLoginCustomerId(e.target.value)}
                 placeholder="e.g. CUS-8F42K7"
@@ -194,10 +251,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </div>
 
             <div>
-              <label className="block text-[12px] font-semibold text-[#072417] mb-1">Password *</label>
+              <label htmlFor="login-password" className="block text-[12px] font-semibold text-[#072417] mb-1">Password *</label>
               <input 
+                id="login-password"
                 type="password" 
-                required 
                 value={loginPassword} 
                 onChange={e => setLoginPassword(e.target.value)}
                 placeholder="••••••••"
@@ -206,6 +263,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </div>
 
             <button 
+              id="submit-customer-signin"
               type="submit" 
               disabled={loading}
               className="w-full py-3 bg-[#072417] text-[#ffdcbd] font-bold text-[13px] uppercase tracking-wider rounded-xl hover:bg-[#0c3623] transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
@@ -215,13 +273,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           </form>
         )}
 
-        {!generatedCustomerId && tab === 'customer-signup' && (
-          <form onSubmit={handleCustomerSignup} className="space-y-4">
+        {!createdCustomerId && tab === 'customer-signup' && (
+          <form id="customer-signup-form" onSubmit={handleCustomerSignup} className="space-y-4">
             <div>
-              <label className="block text-[12px] font-semibold text-[#072417] mb-1">Customer Name *</label>
+              <label htmlFor="signup-name" className="block text-[12px] font-semibold text-[#072417] mb-1">Customer Name *</label>
               <input 
+                id="signup-name"
                 type="text" 
-                required 
                 value={signupName} 
                 onChange={e => setSignupName(e.target.value)}
                 placeholder="Rahul Patil"
@@ -230,10 +288,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </div>
 
             <div>
-              <label className="block text-[12px] font-semibold text-[#072417] mb-1">Password *</label>
+              <label htmlFor="signup-password" className="block text-[12px] font-semibold text-[#072417] mb-1">Password *</label>
               <input 
+                id="signup-password"
                 type="password" 
-                required 
                 value={signupPassword} 
                 onChange={e => setSignupPassword(e.target.value)}
                 placeholder="••••••••"
@@ -242,8 +300,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </div>
 
             <div>
-              <label className="block text-[12px] font-semibold text-[#072417] mb-1">Email (Optional)</label>
+              <label htmlFor="signup-email" className="block text-[12px] font-semibold text-[#072417] mb-1">Email (Optional)</label>
               <input 
+                id="signup-email"
                 type="email" 
                 value={signupEmail} 
                 onChange={e => setSignupEmail(e.target.value)}
@@ -253,6 +312,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </div>
 
             <button 
+              id="submit-customer-signup"
               type="submit" 
               disabled={loading}
               className="w-full py-3 bg-[#072417] text-[#ffdcbd] font-bold text-[13px] uppercase tracking-wider rounded-xl hover:bg-[#0c3623] transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
@@ -262,12 +322,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           </form>
         )}
 
-        {!generatedCustomerId && tab === 'owner-signin' && (
+        {!createdCustomerId && tab === 'owner-signin' && (
           <div className="space-y-4 py-4 text-center">
             <p className="text-[13px] text-[#607769] mb-4">
-              Click below to authenticate with Google as <strong className="text-[#072417]">priyaparmar7030@gmail.com</strong>
+              Click below to authenticate with your authorized Google account.
             </p>
             <button
+              id="owner-google-signin-btn"
               type="button"
               onClick={handleOwnerGoogleLogin}
               disabled={loading}
@@ -287,3 +348,4 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     </div>
   );
 };
+

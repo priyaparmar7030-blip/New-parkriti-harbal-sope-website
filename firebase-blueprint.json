@@ -45,6 +45,78 @@
         "stockCount": { "type": "number" }
       },
       "required": ["id", "name", "price", "stockStatus"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer profile document containing customerId, authUid, name, email, role, and timestamps without passwords",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "authUid": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["customer"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["customerId", "authUid", "name", "role", "createdAt"]
+    },
+    "CustomerAuth": {
+      "title": "CustomerAuth",
+      "description": "Secure server-side encrypted authentication credentials store. Never contains plaintext passwords.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "encryptedData": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["customerId", "encryptedData"]
+    },
+    "Loyalty": {
+      "title": "Loyalty",
+      "description": "Prakriti Loyalty Purchase System record tracking stamps, progress, and secret gift status",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "stamps": { "type": "number" },
+        "target": { "type": "number" },
+        "progress": { "type": "string" },
+        "unlocked": { "type": "boolean" },
+        "gift": { "type": "string" },
+        "secretGiftRevealed": { "type": "boolean" },
+        "revealedGiftDescription": { "type": "string" },
+        "rewardRedeemed": { "type": "boolean" },
+        "redeemedAt": { "type": "string" },
+        "rewardHistory": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "processedOrderIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["customerId", "customerName", "stamps", "target", "progress", "unlocked", "gift"]
+    },
+    "CustomerOffer": {
+      "title": "CustomerOffer",
+      "description": "Exclusive customer offer assigned to a specific Customer ID",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "offerType": { "type": "string" },
+        "title": { "type": "string" },
+        "discountCode": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "expiresAt": { "type": "string" }
+      },
+      "required": ["id", "customerId", "offerType", "title", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -59,6 +131,22 @@
     "/products/{productId}": {
       "schema": "Product",
       "description": "Products inventory collection"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Customer profiles collection"
+    },
+    "/customer_auth/{customerId}": {
+      "schema": "CustomerAuth",
+      "description": "Encrypted authentication credentials for customer ID resolution"
+    },
+    "/loyalty/{customerId}": {
+      "schema": "Loyalty",
+      "description": "Customer loyalty rewards collection"
+    },
+    "/customer_offers/{offerId}": {
+      "schema": "CustomerOffer",
+      "description": "Exclusive offers assigned to specific customer IDs"
     }
   }
 }

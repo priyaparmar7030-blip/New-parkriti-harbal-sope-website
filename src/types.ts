@@ -49,15 +49,55 @@ export interface Review {
 
 export interface Order {
   id: string;
+  customerId?: string;
   customerName: string;
   customerEmail?: string;
   customerAddress: string;
   date: string;
   items: string;
-  quantities: { productId: string; name: string; quantity: number }[];
+  quantities?: { productId: string; name: string; quantity: number }[];
   total: number;
   status: string;
   createdAt: string;
+}
+
+export interface CustomerOffer {
+  id: string;
+  customerId: string;
+  customerName?: string;
+  offerType: 'rupee_off' | 'percent_off' | 'free_soap' | 'free_shipping' | 'gift' | 'custom';
+  title: string;
+  discountCode: string;
+  description: string;
+  status: 'active' | 'redeemed' | 'expired';
+  createdAt: string;
+  expiresAt?: string;
+  createdByName?: string;
+}
+
+export interface RewardHistoryItem {
+  id: string;
+  type: 'unlocked' | 'revealed' | 'redeemed';
+  title: string;
+  timestamp: string;
+  note?: string;
+}
+
+export interface LoyaltyRecord {
+  customerId: string;
+  customerName: string;
+  stamps: number;
+  target: number;
+  progress: string; // e.g. "7/10"
+  unlocked: boolean;
+  gift: string;
+  secretGiftRevealed?: boolean;
+  revealedGiftDescription?: string;
+  rewardRedeemed?: boolean;
+  redeemedAt?: string;
+  rewardHistory?: RewardHistoryItem[];
+  processedOrderIds: string[];
+  updatedAt: string;
 }
 
 export interface WebsiteSettings {

@@ -47,17 +47,41 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    // Firebase auth listener
+    // 1. Verify customer session if customer session token exists
+    const customerToken = localStorage.getItem('prakriti_customer_token');
+    if (customerToken) {
+      fetch('/api/customer-session', {
+        headers: { 'Authorization': `Bearer ${customerToken}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.customer) {
+            setCurrentUser(data.customer);
+          } else {
+            localStorage.removeItem('prakriti_customer_token');
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('prakriti_customer_token');
+        });
+    }
+
+    // 2. Firebase auth listener for Owner Google Auth
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        const isOwner = user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
         setCurrentUser({
           id: user.uid,
+          customerId: isOwner ? 'OWNER' : undefined,
           email: user.email || '',
-          fullName: user.displayName || user.email?.split('@')[0] || 'Valued Customer',
+          fullName: user.displayName || (isOwner ? 'Store Owner' : 'Valued Customer'),
+          role: isOwner ? 'owner' : 'customer',
           createdAt: user.metadata.creationTime || new Date().toISOString()
         });
       } else {
-        setCurrentUser(null);
+        if (!localStorage.getItem('prakriti_customer_token')) {
+          setCurrentUser(null);
+        }
       }
     });
 
@@ -82,7 +106,9 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await firebaseSignOut(auth);
+      localStorage.removeItem('prakriti_customer_token');
+      await fetch('/api/customer-logout', { method: 'POST' }).catch(() => {});
+      await firebaseSignOut(auth).catch(() => {});
       setCurrentUser(null);
       setCurrentView('home');
     } catch (e) {
@@ -158,6 +184,7 @@ export default function App() {
       // Save order to Firestore
       const newOrder: Order = {
         id: orderId,
+        customerId: currentUser?.customerId || '',
         customerName: customerName || currentUser?.fullName || 'Valued Customer',
         customerEmail: currentUser?.email || 'customer@prakritisoap.com',
         customerAddress: customerAddress || 'Akola / All-India',
@@ -173,6 +200,26 @@ export default function App() {
         await setDoc(doc(db, 'orders', orderId), newOrder);
       } catch (err) {
         handleFirestoreError(err, OperationType.CREATE, `orders/${orderId}`);
+      }
+
+      // Also persist to customer local orders list
+      try {
+        const existingOrders = JSON.parse(localStorage.getItem('prakriti_orders') || '[]');
+        localStorage.setItem('prakriti_orders', JSON.stringify([newOrder, ...existingOrders]));
+      } catch (e) {
+        console.error('Error saving local order:', e);
+      }
+
+      // If customer is logged in, sync loyalty immediately
+      if (currentUser?.customerId) {
+        fetch('/api/customer-loyalty/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerId: currentUser.customerId,
+            clientOrders: [newOrder]
+          })
+        }).catch(() => {});
       }
 
       setCart([]);
@@ -288,7 +335,7 @@ export default function App() {
         onClose={() => setIsAuthOpen(false)} 
         onLoginSuccess={(user) => {
           setCurrentUser(user);
-          const ownerMatch = user.email.toLowerCase() === OWNER_EMAIL.toLowerCase();
+          const ownerMatch = user.role === 'owner' || (Boolean(user.email) && user.email.toLowerCase() === OWNER_EMAIL.toLowerCase());
           if (ownerMatch) {
             setCurrentView('admin-dashboard');
           } else {
